@@ -8,45 +8,71 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  #operating system ,1st create vitual machine on cloud
+    runs-on: ubuntu-latest #operating system ,1st create vitual machine on cloud
 
     steps:
-    - name: Checkout code   #2nd copy code from master branch to virtual machine 
-      uses: actions/checkout@v4  #version of function itself 
+      - name: Checkout code    #2nd copy code from master branch to virtual machine 
+        uses: actions/checkout@v4 #version of function itself 
 
-    - name: Set up JDK 17   
-      uses: actions/setup-java@v4  #set up java function , install java in virtual machine
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4   #set up java function , install java in virtual machine
       with:
-        distribution: 'adopt'
-        java-version: '17'
 
-    - name: Build with Gradle   #vitual machine will include gradle default , inside the cloud , not pc 
-      run: gradle build         #build in cloud
+        with:
+          distribution: "adopt"
+          java-version: "17"
 
-    - name: Upload Build Artifacts       #because dont have vm, so need upload artifact 
-      uses: actions/upload-artifact@v4   #keep files from virtual machine , upload files inside path into the git hub
-      with:
-        name: build-artifacts            #once upload , virtual machine delete
-        path: build/libs/**
+      - name: Build (without tests)
+        run: gradle clean assemble
 
-    - name: Run Unit Test
-      run: gradle test
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: build/libs/*.jar
 
-    - name: Upload Test Reports
-      uses: actions/upload-artifact@v4  #upload all files inside test folder , keep a version of report 
-      with:
-        name: test-reports
-        path: build/reports/tests/**
+  test:
+    runs-on: ubuntu-latest
+    needs: build    #need build success first 
 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Generate code coverage report
-      run: gradle jacocoTestReport            #
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "adopt"
+          java-version: "17"
 
-    - name: Upload code coverage report
-      uses: actions/upload-artifact@v4
-      with:
-        name: code-coverage-report
-        path: build/reports/jacoco/test/html/**
-        
-    - name: Run Deployment
-      run: java -jar build/libs/hello-world-java-V1.jar  #could run the application in vm 
+      - name: Run Unit Tests
+        run: gradle test
+
+      - name: Generate code coverage report
+        run: gradle jacocoTestReport
+
+      - name: Upload Test Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: build/reports/tests/**
+
+      - name: Upload code coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage-report
+          path: build/reports/jacoco/test/html/**
+
+  deployment:
+    runs-on: ubuntu-latest
+    needs: [build, test]   #need build and test success first 
+
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: build/libs
+
+      - name: Run Deployment
+        run: java -jar build/libs/*.jar
